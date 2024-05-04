@@ -7,9 +7,8 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
-#define IPV4 4
-#define IPV6 6
-#define BUFFER_SIZE 32
+#define IPV4 AF_INET
+#define IPV6 AF_INET6
 #define MESSAGE_SIZE 40
 
 typedef struct {
@@ -41,13 +40,37 @@ void exitWithSystemMessage(const char *msg) {
   exit(1);
 }
 
+union ServerAddress {
+  struct sockaddr_in serverAddressIPV4; 
+  struct sockaddr_in6 serverAddressIPV6;
+};
+
+union ServerAddress getServerAddressStructure (int ipType, in_port_t servPort) {
+  union ServerAddress serverAddress;
+  memset(&serverAddress, 0, sizeof(serverAddress)); // Zero out structure
+
+  if (ipType == IPV4) {
+    serverAddress.serverAddressIPV4.sin_family = AF_INET; // IPv4 address family
+    serverAddress.serverAddressIPV4.sin_addr.s_addr = htonl(INADDR_ANY); // Any incoming interface
+    serverAddress.serverAddressIPV4.sin_port = htons(servPort); // Local port
+  } else if (ipType == IPV6) {
+    serverAddress.serverAddressIPV6.sin6_family = AF_INET6; // IPv6 address family
+    serverAddress.serverAddressIPV6.sin6_addr = in6addr_any; // Any incoming interface
+    serverAddress.serverAddressIPV6.sin6_port = htons(servPort); // Local port
+  } else {
+    exitWithUserMessage("Invalid IP type", "IP type must be either IPV4 or IPV6");
+  }
+
+  return serverAddress;
+}
+
 int main(int argc, char *argv[]) {
   Coordinate clientCoordinates = {-19.892077728491678, -43.96541482752344};
 
   if(argc != 4)
     exitWithSystemMessage("Parameters: <IP_type> <IP_address)> <port>\n");
 
-  int ipType = (strcmp(argv[1], "ipv4") == 0) ? IPV4 : IPV6;
+  int ipType = (strcmp(argv[1], "ipv6") == 0) ? IPV6 : IPV4;
   char *ipAddress = argv[2];
   int port = atoi(argv[3]);
   
@@ -60,22 +83,24 @@ int main(int argc, char *argv[]) {
     if(endsProgram == 0) break;
 
     // Create a reliable, stream socket using TCP
-    int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    int sock = socket(ipType, SOCK_STREAM, IPPROTO_TCP);
     if(sock == -1) 
       exitWithSystemMessage("socket() failed");
 
     // Construct the server address structure
-    struct sockaddr_in serverAddress; // Server address
-    memset(&serverAddress, 0, sizeof(serverAddress)); // Zero out structure
-    serverAddress.sin_family = AF_INET; // IPv4 address family
+    union ServerAddress serverAddress = getServerAddressStructure(ipType, port);
 
     // Converts the string representation of the server’s address into a 32-bit binary representation
-    int returnValue = inet_pton(AF_INET, ipAddress, &serverAddress.sin_addr.s_addr); 
+    int returnValue = -1;
+    if (ipType == IPV4)
+      returnValue = inet_pton(AF_INET, ipAddress, &serverAddress.serverAddressIPV4.sin_addr.s_addr); 
+    else 
+      returnValue = inet_pton(AF_INET6, ipAddress, &serverAddress.serverAddressIPV6.sin6_addr);
+
     if(returnValue == 0)
       exitWithUserMessage("inet_pton() failed", "invalid address string");
     else if(returnValue < 0)
       exitWithSystemMessage("inet_pton() failed");
-    serverAddress.sin_port = htons(port); 
 
     // Establish the connection to the echo server
     if(connect(sock, (struct sockaddr *) &serverAddress, sizeof(serverAddress)) == -1)
