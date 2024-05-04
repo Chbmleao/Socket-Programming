@@ -9,7 +9,7 @@ int main(int argc, char *argv[]) {
   Coordinate clientCoordinates = {-19.892077728491678, -43.96541482752344};
 
   if(argc != 4)
-    exitWithMessage("Parameters: <IP_type> <IP_address)> <port>\n", NULL);
+    exitWithMessage("Parâmetros: <Tipo_IP> <Endereço_IP> <porta>\n", NULL);
 
   int ipType = (strcmp(argv[1], "ipv6") == 0) ? IPV6 : IPV4;
   char *ipAddress = argv[2];
@@ -25,51 +25,49 @@ int main(int argc, char *argv[]) {
 
     if(endsProgram == 0) break;
 
-    // Create a reliable, stream socket using TCP
+    // Cria um socket confiável e de fluxo usando TCP - Criação de um ponto final de comunicação
     int sock = socket(ipType, SOCK_STREAM, IPPROTO_TCP);
     if(sock == -1) 
-      exitWithMessage("socket() failed", NULL);
+      exitWithMessage("socket() falhou", NULL);
 
-    // Construct the server address structure
+    // Constrói a estrutura de endereço do servidor
     union ServerAddress serverAddress = getServerAddressStructure(ipType, port);
 
-    // Converts the string representation of the server’s address into a 32-bit binary representation
+    // Converte a representação de string do endereço do servidor em uma representação binária de 32 bits
     int returnValue = -1;
     if (ipType == IPV4)
       returnValue = inet_pton(AF_INET, ipAddress, &serverAddress.serverAddressIPV4.sin_addr.s_addr); 
     else 
       returnValue = inet_pton(AF_INET6, ipAddress, &serverAddress.serverAddressIPV6.sin6_addr);
-
     if(returnValue == 0)
-      exitWithMessage("inet_pton() failed", "invalid address string");
+      exitWithMessage("inet_pton() falhou", "endereço inválido");
     else if(returnValue < 0)
-      exitWithMessage("inet_pton() failed", NULL);
+      exitWithMessage("inet_pton() falhou", NULL);
 
-    // Establish the connection to the echo server
+    // Abertura Ativa
+    // Estabelece a conexão com o servidor - Inicia uma conexão a um socket
     if(connect(sock, (struct sockaddr *) &serverAddress, sizeof(serverAddress)) == -1)
-      exitWithMessage("connect() failed", NULL);
+      exitWithMessage("connect() falhou", NULL);
 
     char message[MESSAGE_SIZE]; 
     sprintf(message, "%lf, %lf", clientCoordinates.latitude, clientCoordinates.longitude);
 
+    // Enviam mensagens para o socket do servidor
     ssize_t numBytes = send(sock, message, sizeof(message), 0);
     if (numBytes < 0)
-      exitWithMessage("send() failed", NULL);
+      exitWithMessage("send() falhou", NULL);
     else if (numBytes != sizeof(message))
-      exitWithMessage("send()", "sent unexpected number of bytes");
+      exitWithMessage("send()", "número inesperado de bytes enviados");
 
     char buffer[MESSAGE_SIZE];
     while(1) {
       memset(buffer, 0, sizeof(buffer));
-      numBytes = recv(sock, buffer, sizeof(buffer) - 1, 0); // Adjust buffer size to leave space for null terminator
-
+      numBytes = recv(sock, buffer, sizeof(buffer) - 1, 0); // Ajusta o tamanho do buffer para deixar espaço para o terminador nulo
+      buffer[numBytes] = '\0'; // Garante que o buffer esteja terminado em nulo
       if(numBytes < 0)
-        exitWithMessage("recv() failed", NULL);
+        exitWithMessage("recv() falhou", NULL);
       else if(numBytes == 0) 
-        exitWithMessage("recv()", "connection closed prematurely");
-      
-        
-      buffer[numBytes] = '\0'; // Ensure buffer is null-terminated
+        exitWithMessage("recv()", "conexão fechada prematuramente");
 
       if(strcmp(buffer, "NO_DRIVER_FOUND") == 0) {
         noDriverFound = 1;
@@ -83,9 +81,9 @@ int main(int argc, char *argv[]) {
       }      
     }
 
+    // Fecha o descritor de arquivo do socket
     close(sock);
   }
 
-  exit(0);
   return 0;
 }
