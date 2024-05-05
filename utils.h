@@ -32,6 +32,6 @@ union ClientAddress {
 
 void exitWithMessage(const char *msg, const char *detail);
 
-union ServerAddress getServerAddressStructure (int ipType, in_port_t servPort);
+union ServerAddress getServerAddressStructure (int ipType, in_port_t serverPort);
 
 #endif // UTILS_H
